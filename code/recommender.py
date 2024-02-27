@@ -288,6 +288,7 @@ def main():
         plt.bar(ind + i*width, val_mse_dict[METHOD], width, label=METHOD)
 
     plt.ylabel('Validation MSE')
+    plt.xlabel ('Hidden Dimensions')
     plt.title('Validation MSE by Method and Hidden Dimension Size')
     plt.xticks(ind + width / 2, hidden_dims)
     plt.legend(loc='best')
