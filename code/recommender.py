@@ -3,74 +3,47 @@ import torch  # download & install PyTorch here:  https://pytorch.org/get-starte
 import torch.nn as nn
 import pandas as pd
 import numpy as np
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
 torch.manual_seed(0)
 
 # You also need to install the libraries listed above
 # This can be done with: pip install pandas numpy
 
+# Creating a "plots" directory if it does not already exist
+plots_dir = "/Users/chikamaduabuchi/Desktop/6.C51/PSET2/plots"
+os.makedirs(plots_dir, exist_ok=True)
 
 ##########################################
 ##  Helper Functions (Provided for you) ##
 ##########################################
 
 def train_model(X_train, y_train, k, max_iter=50, batch_size=32, print_n=10, verbose=True):
-    '''
-    Trains neural network model on X_train, y_train data.
-
-    Parameters
-    ----------
-    X_train: np.array
-        matrix of training data features
-    y_train: np.array
-        vector of training data labels
-    k: int
-        size of hidden layer to use in neural network
-    max_iter: int
-        maximum number of iterations to train for
-    batch_size: int
-        batch size to use when training w/ SGD
-    print_n: int
-        print training progress every print_n steps
-
-    Returns
-    ----------
-    nn_model: torch.nn.Module
-        trained neural network model
-    '''
-    # convert to tensors (for Pytorch)
     X_train_tensor = torch.tensor(X_train)
     y_train_tensor = torch.tensor(y_train)
-    # intialize neural network
     n_samples, n_features = X_train_tensor.shape
     nn_model = NN(n_features, k)
-    nn_model.train()  # put model in train mode
-    # initialize mse loss function
+    nn_model.train()
     mse_loss = torch.nn.MSELoss()
-    # train with (mini-batch) SGD; initialize optimizer
     opt = torch.optim.SGD(nn_model.parameters(), lr=0.001)
+    losses = []
     for it in range(max_iter):
-        # save losses across all batches
-        losses = []
-        # loop through data in batches
+        batch_losses = []
         for batch_start in range(0, n_samples, batch_size):
-            # reset gradients to zero
             opt.zero_grad()
-            # form batch
             X_batch = X_train_tensor[batch_start:batch_start+batch_size]
             y_batch = y_train_tensor[batch_start:batch_start+batch_size]
-            # pass batch through neural net to get prediction
             y_pred = nn_model(X_batch.float())
-            # compute MSE loss
             loss = mse_loss(y_pred, y_batch[:, None].float())
-            # back-propagate loss
             loss.backward()
-            # update model parameters based on backpropogated gradients
             opt.step()
-            losses.append(loss.item())
+            batch_losses.append(loss.item())
         if verbose and it % print_n == 0:
-            print(f"Mean Train MSE at step {it}: {np.mean(losses)}")
-    return nn_model
+            print(f"Mean Train MSE at step {it}: {np.mean(batch_losses)}")
+        losses.append(np.mean(batch_losses))
+    return nn_model, losses
 
 
 def evaluate_model(nn_model, X_eval, y_eval, batch_size=32):
@@ -280,31 +253,45 @@ def process_data_with_genres(ratings_df, N, M):
 
 
 def main():
-    # Load data used for training and evaluation
-    path_to_ratings_file = "book_ratings.csv"
+    path_to_ratings_file = "data/book_ratings.csv"
     train_df, val_df, test_df, n_users, n_books = read_data(path_to_ratings_file)
+    methods = ["one_hot", "genre_info"]
+    hidden_dims = [20, 60, 100]
 
-    METHOD = "genre_info"  # change this to "genre_info" to test the other approach!
+    # Validation MSE storage
+    val_mse_dict = {method: [] for method in methods}
 
-    # get feature label pairs (x, y) from ratings dataframes
-    if METHOD == "one_hot":
-        X_train, y_train = process_data_one_hot(train_df, n_users, n_books)
-        X_val, y_val = process_data_one_hot(val_df, n_users, n_books)
-    else: # method is "genre_info"
-        X_train, y_train = process_data_with_genres(train_df, n_users, n_books)
-        X_val, y_val = process_data_with_genres(val_df, n_users, n_books)
+    # Create a directory for plots if it does not exist
+    plots_dir = 'plots'
+    os.makedirs(plots_dir, exist_ok=True)
 
-    # train NN model to predict rating from user + book features using train data
-    for k in [20, 60, 100]:
-        print('_________Performing Training for %d Hidden Dimension_______'%k)
-        nn_model = train_model(X_train, y_train, k)
-        # evaluate performance of final model on train data
-        train_mse = evaluate_model(nn_model, X_train, y_train)
-        print(f"Train MSE for feature method {METHOD}, k={k} is: {train_mse}")
-        # evaluate performance of model on validation data
-        val_mse = evaluate_model(nn_model, X_val, y_val)
-        print(f"Validation MSE for feature method {METHOD}, k={k} is: {val_mse}")
+    for METHOD in methods:
+        for k in hidden_dims:
+            if METHOD == "one_hot":
+                X_train, y_train = process_data_one_hot(train_df, n_users, n_books)
+                X_val, y_val = process_data_one_hot(val_df, n_users, n_books)
+            else:  # Assuming the alternative is "genre_info"
+                X_train, y_train = process_data_with_genres(train_df, n_users, n_books)
+                X_val, y_val = process_data_with_genres(val_df, n_users, n_books)
 
+            print(f'_________Performing Training for {k} Hidden Dimension using {METHOD} Method_______')
+            nn_model, training_losses = train_model(X_train, y_train, k)
+            mse = evaluate_model(nn_model, X_val, y_val)
+            val_mse_dict[METHOD].append(mse)  # Store the MSE for plotting
+
+    # Plotting the comparison of Validation MSE
+    plt.figure(figsize=(10, 6))
+    width = 0.35  # width of the bars
+    ind = np.arange(len(hidden_dims))  # the x locations for the groups
+
+    for i, METHOD in enumerate(methods):
+        plt.bar(ind + i*width, val_mse_dict[METHOD], width, label=METHOD)
+
+    plt.ylabel('Validation MSE')
+    plt.title('Validation MSE by Method and Hidden Dimension Size')
+    plt.xticks(ind + width / 2, hidden_dims)
+    plt.legend(loc='best')
+    plt.savefig(os.path.join(plots_dir, 'comparison_validation_mse.png'))
 
 if __name__ == '__main__':
     main()
