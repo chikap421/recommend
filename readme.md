@@ -26,14 +26,6 @@ The system compares the validation MSE across two data processing methods: one-h
 
 This image showcases the model's performance using different configurations and data processing techniques, providing insights into the effectiveness of each approach.
 
-
-
-
-## Install Pandas and NumPy
-```python
-pip install pandas numpy
-```
-
 ## Usage
 1.  Prepare your dataset in CSV format, ensuring it includes user ratings, book information, and optionally, genre information.
 2.  Set the `path_to_ratings_file` variable in the main function to point to your dataset file.
